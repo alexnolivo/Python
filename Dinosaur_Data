@@ -1,0 +1,133 @@
+from bs4 import BeautifulSoup
+import requests
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
+import pandas as pd
+
+# Set up Selenium web driver
+service = Service(ChromeDriverManager().install())
+driver = webdriver.Chrome(service=service)
+
+# URL containing all the dinosaur names
+url = 'https://www.nhm.ac.uk/discover/dino-directory/name/name-az-all.html'
+
+# Send a GET request to the URL
+response = requests.get(url)
+html_code = response.content
+
+# Create a BeautifulSoup object
+soup = BeautifulSoup(html_code, 'html.parser')
+
+# Find all the dinosaur name links
+dinosaur_links = soup.select('ul.dinosaurfilter--dino-list a')
+
+# Extract the URLs for each dinosaur
+dinosaur_urls = [link['href'] for link in dinosaur_links]
+
+# Prepend the base URL if necessary
+base_url = 'https://www.nhm.ac.uk'
+dinosaur_full_urls = [base_url + url for url in dinosaur_urls]
+
+# Iterate over the dinosaur URLs
+# Iterate over the dinosaur URLs
+# Initialize the list to store dinosaur data
+dinosaur_data = []
+
+# Iterate over the dinosaur URLs
+for url in dinosaur_full_urls:
+    try:
+        # Open the dinosaur URL using Selenium
+        driver.get(url)
+
+        # Get the current URL after any redirects
+        current_url = driver.current_url
+
+        # Create a new BeautifulSoup object from the loaded page source
+        soup = BeautifulSoup(driver.page_source, 'html.parser')
+
+        # Extract the desired information
+        dinosaur_name_element = soup.find('h1', class_='dinosaur--name')
+        dinosaur_name = dinosaur_name_element.text if dinosaur_name_element else ''
+        
+        name_meaning_element = soup.find('dd', class_='dinosaur--meaning')
+        name_meaning = name_meaning_element.text if name_meaning_element else ''
+        
+        dinosaur_info_element = soup.find('dl', class_='dinosaur--info')
+        diet_element = dinosaur_info_element.find('a') if dinosaur_info_element else None
+        diet = diet_element.text if diet_element else ''
+        
+        when_lived_element = dinosaur_info_element.find('a', href=lambda href: href.startswith('https://www.nhm.ac.uk/discover/dino-directory/timeline/')) if dinosaur_info_element else None
+        when_lived = when_lived_element.text if when_lived_element else ''
+        
+        found_in_element = dinosaur_info_element.find('a', href=lambda href: href.startswith('https://www.nhm.ac.uk/discover/dino-directory/country/')) if dinosaur_info_element else None
+        found_in = found_in_element.text if found_in_element else ''
+        
+        dinosaur_description = soup.find('dl', class_='dinosaur--description')
+        
+        length_element = dinosaur_description.find('dt', text='Length:')
+        length = length_element.find_next_sibling('dd').text if length_element else ''
+        
+        dinosaur_type_element = dinosaur_description.find('dt', text='Type of dinosaur:')
+        dinosaur_type = dinosaur_type_element.find_next_sibling('dd').text if dinosaur_type_element else ''
+        
+        taxonomy_element = soup.find('dl', class_='dinosaur--taxonomy')
+        taxonomy = taxonomy_element.find('dd').text if taxonomy_element else ''
+        
+        named_by_element = taxonomy_element.find('dt', text='Named by:')
+        named_by = named_by_element.find_next_sibling('dd').text if named_by_element else ''
+        
+        type_species_element = taxonomy_element.find('dt', text='Type species:')
+        type_species = type_species_element.find_next_sibling('dd').text if type_species_element else ''
+        
+        # Create a dictionary to store the dinosaur data
+        dinosaur_dict = {
+            'Dinosaur_Name': dinosaur_name,
+            'Name_Meaning': name_meaning,
+            'Diet': diet,
+            'When_it_lived': when_lived,
+            'Found_in': found_in,
+            'Type_of_Dinosaur': dinosaur_type,
+            'Length': length,
+            'Taxonomy': taxonomy,
+            'Named_By': named_by,
+            'Type_Species': type_species
+        }
+        
+        # Append the dictionary to the list
+        dinosaur_data.append(dinosaur_dict)
+
+        # Print the extracted information
+       # print("Dinosaur Name:", dinosaur_name)
+        #print("Name Meaning:", name_meaning)
+        #print("Diet:", diet)
+        #print("When it lived:", when_lived)
+        #print("Found in:", found_in)
+        #print("Type of Dinosaur:", dinosaur_type)
+        #print("Length:", length)
+        #print("Taxonomy:", taxonomy)
+        #print("Named By:", named_by)
+        #print("Type Species:", type_species)
+        #print("---------------")
+
+    except requests.exceptions.HTTPError as err:
+        # Handle 404 error
+        print(f"404 Error for URL: {url}. Skipping to the next URL.")
+        continue
+
+# Convert the list of dictionaries to a DataFrame
+df = pd.DataFrame(dinosaur_data)
+print(df)
+
+
+ %reload_ext google.cloud.bigquery
+import pandas_gbq
+
+project_id = 'nhm-dinosaurs'
+
+# Your BigQuery dataset ID and table name
+dataset_id = 'Dinosaur_Data'
+table_name = 'Dinosaur_Data_Table'
+table_id = f'{project_id}.{dataset_id}.{table_name}'
+pandas_gbq.to_gbq(df, table_id, project_id=project_id, if_exists='replace')
+#df.to_gbq(destination_table='nhm-dinosaurs.Dinosaur_Data.Dinosaur Data Table', if_exists='replace')
